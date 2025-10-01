@@ -1,4 +1,4 @@
-# Smart-Health-Clip
+# Smart-Health-Band
 스마트 헬스 밴드 2025_10
 
 밴드형 장점
