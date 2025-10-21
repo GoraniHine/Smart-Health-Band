@@ -18,13 +18,16 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "i2c.h"
+#include "usart.h"
+#include "gpio.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include <stdio.h>
 #include <string.h>
 #include "esp8266.h"
-//#include "max30102.h"
+#include "max30102.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -43,10 +46,6 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
-I2C_HandleTypeDef hi2c1;
-
-UART_HandleTypeDef huart1;
-UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
 
@@ -54,15 +53,22 @@ UART_HandleTypeDef huart2;
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
-static void MX_GPIO_Init(void);
-static void MX_I2C1_Init(void);
-static void MX_USART1_UART_Init(void);
-static void MX_USART2_UART_Init(void);
 /* USER CODE BEGIN PFP */
 int __io_putchar(int ch)
 {
     HAL_UART_Transmit(&huart2, (uint8_t*)&ch, 1, HAL_MAX_DELAY);
     return ch;
+}
+
+void I2C_Scanner(void) {
+    for(uint8_t addr=1; addr<128; addr++) {
+        if(HAL_I2C_IsDeviceReady(&hi2c1, addr << 1, 1, 1) == HAL_OK) {
+            printf("Found device at 0x%02X\r\n", addr);
+        } else {
+            printf(".");
+        }
+    }
+    printf("\r\nDone scanning\r\n");
 }
 
 void I2C_Scanner(void);
@@ -72,7 +78,7 @@ void I2C_Scanner(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
-//MAX30102_t sensor;
+MAX30102_t sensor;
 /* USER CODE END 0 */
 
 /**
@@ -104,16 +110,19 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
-  MX_I2C1_Init();
   MX_USART1_UART_Init();
   MX_USART2_UART_Init();
+  MX_I2C1_Init();
   /* USER CODE BEGIN 2 */
-
+  printf("Hello\r\n");
+  HAL_Delay(1000);
+  I2C_Scanner();
   uint32_t last_tick = HAL_GetTick(); // 초계산 버려도 됨
   uint32_t counter = 0; // 값보내기위한 예시 버려도됨
 
-  //MAX30102_Init(&sensor, &hi2c1);
-  //MAX30102_SetLEDs(&sensor, 10.0, 10.0);
+  MAX30102_Init(&sensor, &hi2c1);
+  HAL_Delay(2000);
+  /*
   printf("=== ESP8266 TCP 서버 시작 ===\r\n");
 
   ESP8266_HandleTypeDef esp;
@@ -123,17 +132,17 @@ int main(void)
   const char *ssid = "KT_GiGA_2G_Wave2_3323";
   const char *pwd  = "ke1bfg9832";
 
-  ESP_ConnectWiFi(&esp, ssid, pwd);
+  //ESP_ConnectWiFi(&esp, ssid, pwd); //
   printf("Wi-Fi 연결 시도 완료, ESP 응답을 터미널에서 확인하세요\r\n");
 
   char ip[16];
 
-  ESP_GetIP(&esp, ip, sizeof(ip));
+  //ESP_GetIP(&esp, ip, sizeof(ip)); //
   printf("ESP IP 확인 완료: %s\r\n", ip);
+  */
+  //ESP_SendCommand(&esp, "AT+CIPSERVER=0", 1000); //
 
-  ESP_SendCommand(&esp, "AT+CIPSERVER=0", 1000);
-
-
+  /*
   if(ESP_StartTCPServer(&esp, 5000))
   {
       printf("TCP 서버 시작 성공\r\n");
@@ -144,7 +153,7 @@ int main(void)
   {
       printf("TCP 서버 시작 실패\r\n");
   }
-
+  */
 
   /* USER CODE END 2 */
 
@@ -155,7 +164,18 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+      MAX30102_ReadFIFO(&sensor);
+      uint32_t ir_avg  = MAX30102_GetIRAvg(&sensor);
+      uint32_t red_avg = MAX30102_GetREDAvg(&sensor);
 
+      if(HAL_GetTick() - last_tick >= 1000)
+          {
+              last_tick = HAL_GetTick();
+              printf("IR: %lu, RED: %lu\r\n", ir_avg, red_avg);
+          }
+      HAL_Delay(15);
+
+      /*
       if(HAL_GetTick() - last_tick >= 1000)
       {
           last_tick = HAL_GetTick();
@@ -172,6 +192,7 @@ int main(void)
           // 실제 메시지 전송
           HAL_UART_Transmit(&huart1, (uint8_t*)msg, strlen(msg), 1000);
       }
+      */
   }
   /* USER CODE END 3 */
 }
@@ -210,146 +231,6 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
-}
-
-/**
-  * @brief I2C1 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_I2C1_Init(void)
-{
-
-  /* USER CODE BEGIN I2C1_Init 0 */
-
-  /* USER CODE END I2C1_Init 0 */
-
-  /* USER CODE BEGIN I2C1_Init 1 */
-
-  /* USER CODE END I2C1_Init 1 */
-  hi2c1.Instance = I2C1;
-  hi2c1.Init.ClockSpeed = 100000;
-  hi2c1.Init.DutyCycle = I2C_DUTYCYCLE_2;
-  hi2c1.Init.OwnAddress1 = 0;
-  hi2c1.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
-  hi2c1.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
-  hi2c1.Init.OwnAddress2 = 0;
-  hi2c1.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
-  hi2c1.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
-  if (HAL_I2C_Init(&hi2c1) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN I2C1_Init 2 */
-
-  /* USER CODE END I2C1_Init 2 */
-
-}
-
-/**
-  * @brief USART1 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_USART1_UART_Init(void)
-{
-
-  /* USER CODE BEGIN USART1_Init 0 */
-
-  /* USER CODE END USART1_Init 0 */
-
-  /* USER CODE BEGIN USART1_Init 1 */
-
-  /* USER CODE END USART1_Init 1 */
-  huart1.Instance = USART1;
-  huart1.Init.BaudRate = 115200;
-  huart1.Init.WordLength = UART_WORDLENGTH_8B;
-  huart1.Init.StopBits = UART_STOPBITS_1;
-  huart1.Init.Parity = UART_PARITY_NONE;
-  huart1.Init.Mode = UART_MODE_TX_RX;
-  huart1.Init.HwFlowCtl = UART_HWCONTROL_NONE;
-  huart1.Init.OverSampling = UART_OVERSAMPLING_16;
-  if (HAL_UART_Init(&huart1) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN USART1_Init 2 */
-
-  /* USER CODE END USART1_Init 2 */
-
-}
-
-/**
-  * @brief USART2 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_USART2_UART_Init(void)
-{
-
-  /* USER CODE BEGIN USART2_Init 0 */
-
-  /* USER CODE END USART2_Init 0 */
-
-  /* USER CODE BEGIN USART2_Init 1 */
-
-  /* USER CODE END USART2_Init 1 */
-  huart2.Instance = USART2;
-  huart2.Init.BaudRate = 115200;
-  huart2.Init.WordLength = UART_WORDLENGTH_8B;
-  huart2.Init.StopBits = UART_STOPBITS_1;
-  huart2.Init.Parity = UART_PARITY_NONE;
-  huart2.Init.Mode = UART_MODE_TX_RX;
-  huart2.Init.HwFlowCtl = UART_HWCONTROL_NONE;
-  huart2.Init.OverSampling = UART_OVERSAMPLING_16;
-  if (HAL_UART_Init(&huart2) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN USART2_Init 2 */
-
-  /* USER CODE END USART2_Init 2 */
-
-}
-
-/**
-  * @brief GPIO Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_GPIO_Init(void)
-{
-  GPIO_InitTypeDef GPIO_InitStruct = {0};
-/* USER CODE BEGIN MX_GPIO_Init_1 */
-/* USER CODE END MX_GPIO_Init_1 */
-
-  /* GPIO Ports Clock Enable */
-  __HAL_RCC_GPIOC_CLK_ENABLE();
-  __HAL_RCC_GPIOA_CLK_ENABLE();
-  __HAL_RCC_GPIOB_CLK_ENABLE();
-
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_RESET);
-
-  /*Configure GPIO pin : BTN_Pin */
-  GPIO_InitStruct.Pin = BTN_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(BTN_GPIO_Port, &GPIO_InitStruct);
-
-  /*Configure GPIO pin : LED_Pin */
-  GPIO_InitStruct.Pin = LED_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(LED_GPIO_Port, &GPIO_InitStruct);
-
-  /* EXTI interrupt init*/
-  HAL_NVIC_SetPriority(EXTI15_10_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
-
-/* USER CODE BEGIN MX_GPIO_Init_2 */
-/* USER CODE END MX_GPIO_Init_2 */
 }
 
 /* USER CODE BEGIN 4 */

@@ -11,7 +11,7 @@
 #include "stm32f1xx_hal.h"
 #include <stdint.h>
 
-// ESP8266 핸들 구조체
+// ESP8266 핸들 구조체 ESP8266모듚과 MCU 가 어떤 UART 포트를 통해 연결되어 있는지 저장하는 핸들
 typedef struct {
     UART_HandleTypeDef *huart;
 } ESP8266_HandleTypeDef;
