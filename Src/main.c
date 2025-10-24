@@ -87,115 +87,145 @@ MAX30102_t sensor;
   */
 int main(void)
 {
+    /* USER CODE BEGIN 1 */
+    /* USER CODE END 1 */
 
-  /* USER CODE BEGIN 1 */
+    /* MCU Configuration--------------------------------------------------------*/
+    HAL_Init();
 
-  /* USER CODE END 1 */
+    /* USER CODE BEGIN Init */
+    /* USER CODE END Init */
 
-  /* MCU Configuration--------------------------------------------------------*/
+    /* Configure the system clock */
+    SystemClock_Config();
 
-  /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
-  HAL_Init();
+    /* USER CODE BEGIN SysInit */
+    /* USER CODE END SysInit */
 
-  /* USER CODE BEGIN Init */
+    /* Initialize all configured peripherals */
+    MX_GPIO_Init();
+    MX_USART1_UART_Init();
+    MX_USART2_UART_Init();
+    MX_I2C1_Init();
 
-  /* USER CODE END Init */
+    /* USER CODE BEGIN 2 */
+    printf("Hello\r\n");
+    HAL_Delay(1000);
 
-  /* Configure the system clock */
-  SystemClock_Config();
+    I2C_Scanner();
 
-  /* USER CODE BEGIN SysInit */
+    MAX30102_Init(&sensor, &hi2c1);
+    HAL_Delay(2000);
 
-  /* USER CODE END SysInit */
+    uint32_t last_tick = HAL_GetTick();
+    uint32_t start_tick = 0;
+    uint8_t first_detected = 1;  // 손가락 처음 감지
+    uint8_t measured_done = 0;
 
-  /* Initialize all configured peripherals */
-  MX_GPIO_Init();
-  MX_USART1_UART_Init();
-  MX_USART2_UART_Init();
-  MX_I2C1_Init();
-  /* USER CODE BEGIN 2 */
-  printf("Hello\r\n");
-  HAL_Delay(1000);
-  I2C_Scanner();
-  uint32_t last_tick = HAL_GetTick(); // 초계산 버려도 됨
-  uint32_t counter = 0; // 값보내기위한 예시 버려도됨
 
-  MAX30102_Init(&sensor, &hi2c1);
-  HAL_Delay(2000);
-  /*
-  printf("=== ESP8266 TCP 서버 시작 ===\r\n");
+    printf("=== ESP8266 TCP 서버 시작 ===\r\n");
 
-  ESP8266_HandleTypeDef esp;
-  ESP_Init(&esp, &huart1);
+    ESP8266_HandleTypeDef esp;
 
-  // Wi-Fi 연결
-  const char *ssid = "KT_GiGA_2G_Wave2_3323";
-  const char *pwd  = "ke1bfg9832";
+    ESP_Init(&esp, &huart1); // Wi-Fi 연결
+    const char *ssid = "KT_GiGA_2G_Wave2_3323";
+    const char *pwd = "ke1bfg9832";
 
-  //ESP_ConnectWiFi(&esp, ssid, pwd); //
-  printf("Wi-Fi 연결 시도 완료, ESP 응답을 터미널에서 확인하세요\r\n");
+    ESP_ConnectWiFi(&esp, ssid, pwd);
+    printf("Wi-Fi 연결 시도 완료, ESP 응답을 터미널에서 확인하세요\r\n");
+    char ip[16];
 
-  char ip[16];
+    ESP_GetIP(&esp, ip, sizeof(ip));
+    printf("ESP IP 확인 완료: %s\r\n", ip);
 
-  //ESP_GetIP(&esp, ip, sizeof(ip)); //
-  printf("ESP IP 확인 완료: %s\r\n", ip);
-  */
-  //ESP_SendCommand(&esp, "AT+CIPSERVER=0", 1000); //
+    ESP_SendCommand(&esp, "AT+CIPSERVER=0", 1000);
 
-  /*
-  if(ESP_StartTCPServer(&esp, 5000))
-  {
-      printf("TCP 서버 시작 성공\r\n");
-      ESP_SendCommand(&esp, "AT+CIPMUX?", 500);
-      ESP_SendCommand(&esp, "AT+CIPSERVER?", 500);
-  }
-  else
-  {
-      printf("TCP 서버 시작 실패\r\n");
-  }
-  */
+    if(ESP_StartTCPServer(&esp, 5000))
+    {
+        printf("TCP 서버 시작 성공\r\n");
+        ESP_SendCommand(&esp, "AT+CIPMUX?", 500);
+        ESP_SendCommand(&esp, "AT+CIPSERVER?", 500);
+    }
+    else
+    {
+        printf("TCP 서버 시작 실패\r\n");
+    }
 
-  /* USER CODE END 2 */
 
-  /* Infinite loop */
-  /* USER CODE BEGIN WHILE */
-  while (1)
-  {
-    /* USER CODE END WHILE */
+    /* USER CODE END 2 */
 
-    /* USER CODE BEGIN 3 */
-      MAX30102_ReadFIFO(&sensor);
-      uint32_t ir_avg  = MAX30102_GetIRAvg(&sensor);
-      uint32_t red_avg = MAX30102_GetREDAvg(&sensor);
+    /* Infinite loop */
+    /* USER CODE BEGIN WHILE */
+    while (1)
+    {
+        /* USER CODE END WHILE */
+        /* USER CODE BEGIN 3 */
 
-      if(HAL_GetTick() - last_tick >= 1000)
-          {
-              last_tick = HAL_GetTick();
-              printf("IR: %lu, RED: %lu\r\n", ir_avg, red_avg);
-          }
-      HAL_Delay(15);
+        // FIFO 읽기
+        MAX30102_ReadFIFO(&sensor);
 
-      /*
-      if(HAL_GetTick() - last_tick >= 1000)
-      {
-          last_tick = HAL_GetTick();
+        uint32_t ir_avg = MAX30102_GetIRAvg(&sensor);
 
-          char msg[50];
-          counter++;  // 값 1 증가
-          snprintf(msg, sizeof(msg), "Counter: %lu\r\n", counter);
+        // 매 루프마다 샘플 추가
+        if(ir_avg > 5000)
+        {
+            MAX30102_AddSample(ir_avg);
 
-          // 다중 연결 모드: 클라이언트 ID=0, 메시지 길이 계산
-          char cmd[30];
-          snprintf(cmd, sizeof(cmd), "AT+CIPSEND=0,%lu", strlen(msg));
-          ESP_SendCommand(&esp, cmd, 500);
+            if(first_detected)
+            {
+                start_tick = HAL_GetTick();
+                first_detected = 0;
+            }
 
-          // 실제 메시지 전송
-          HAL_UART_Transmit(&huart1, (uint8_t*)msg, strlen(msg), 1000);
-      }
-      */
-  }
-  /* USER CODE END 3 */
+            uint32_t elapsed = HAL_GetTick() - start_tick;
+
+            if(!measured_done && elapsed >= 5000 && MAX30102_GetSampleCount() >= 100)
+            {
+                uint32_t bpm = MAX30102_GetHeartRate();
+                MAX30102_PrintIRBuffer();
+                printf("심박수 측정 완료: %lu BPM\r\n", bpm);
+
+                char msg[10]; // ESP8266로 전송할 메시지
+                snprintf(msg, sizeof(msg), "%lu", bpm);
+
+                measured_done = 1;
+
+                char cmd[30]; // ESP8266 AT 명령어
+                snprintf(cmd, sizeof(cmd), "AT+CIPSEND=0,%lu", strlen(msg));
+                ESP_SendCommand(&esp, cmd, 500); // ESP8266에 전송 명령 보내기
+                HAL_UART_Transmit(&huart1, (uint8_t*)msg, strlen(msg), 1000); // 심박수 전송
+            }
+        }
+        else
+        {
+            // 손을 떼면 초기화
+            first_detected = 1;
+            measured_done = 0;
+            MAX30102_ResetSamples();
+        }
+
+        HAL_Delay(15);
+    }
+
+    /*
+    if(HAL_GetTick() - last_tick >= 1000)
+    {
+        last_tick = HAL_GetTick();
+        char msg[50];
+        counter++; // 값 1 증가
+        snprintf(msg, sizeof(msg), "Counter: %lu\r\n", counter);
+        // 다중 연결 모드: 클라이언트 ID=0, 메시지 길이 계산
+        char cmd[30];
+        snprintf(cmd, sizeof(cmd), "AT+CIPSEND=0,%lu", strlen(msg));
+        ESP_SendCommand(&esp, cmd, 500); // 실제 메시지 전송
+        HAL_UART_Transmit(&huart1, (uint8_t*)msg, strlen(msg), 1000);
+    }
+    */
+
+    /* USER CODE END 3 */
 }
+
+
 
 /**
   * @brief System Clock Configuration
